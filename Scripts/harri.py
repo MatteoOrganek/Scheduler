@@ -1,33 +1,19 @@
 import operator
-import pathlib
-import platform
-import random
 from datetime import datetime, timedelta
 from time import sleep
-import time
-
+import utils
 import requests
-
-from pyvirtualdisplay import Display
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
-import seleniumwire.webdriver as webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-
 import communicator
 import credentials
-
-# pip install blinker==1.7.0
-
-if platform.system() == 'Windows':
-    PI = False
-else:
-    PI = True
-
+import random
 
 # BLOCK = [ID, FIRST NAME, LAST NAME, POSITION, START_SCHEDULE, END_SCHEDULE, NOTE]
 class ScheduleBlock:
+    """
+    The class ScheduleBlock stores most of the values provided by harri
+    """
     def __init__(self, block):
         self.id = block[0]
         self.first_name = block[1]
@@ -52,130 +38,89 @@ class ScheduleBlock:
             return "DOUBLE"
 
 
-def slow_type(element, text, delay_s=0.1, delay_e=0.4):
-    """Send a text to an element one character at a time with a delay."""
-    for character in text:
-        element.send_keys(character)
-        time.sleep(random.uniform(delay_s, delay_e))
-
-
-def get_driver():
-    print("@ Creating new driver session...")
-    options = Options()
-    script_directory = pathlib.Path().absolute()
-    options.add_argument("--disable-extensions")
-    options.add_experimental_option('useAutomationExtension', False)
-
-    if PI:
-        display = Display(visible=False, size=(3600, 2200))
-        display.start()
-        options.add_argument("--start-maximized")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--use_subprocess")
-        options.headless = True
-        print("@ Virtual display successfully setup.")
-        options.add_argument(f"user-data-dir=chromedriver")
-        service = Service(executable_path="/usr/lib/chromium-browser/chromedriver")
-        _driver = webdriver.Chrome(seleniumwire_options={'mitm_http2': False}, options=options, service=service)
-        print("@ Driver successfully setup.")
-
-    else:
-        options.add_argument(f"user-data-dir={script_directory}\\owres")
-        _driver = webdriver.Chrome(seleniumwire_options={'mitm_http2': False}, options=options)
-        print("@ Driver successfully setup.")
-
-    return _driver
-
-
 def login(_driver):
+    """
+    The login function deals with harri's login page, injecting credentials when needed. If it does not find an "anchor"
+    such as "General Manager" (a text that appears only when the page has completely loaded), it will continue searching
+    until it reaches 200 seconds. Once the countdown reaches 0, it returns false.
+    :param _driver
+    :return successful login
+    """
+
     print("* Fetching rota...")
+
+    # Get redirected to the harri login page
     _driver.get("https://live.harri.com/schedule")
 
     _iterations = 200
 
+    # Iterate until iterations reach 0
     while _iterations != 0:
+
         print("\r", end="")
         print(f"* Scanning ... {_iterations}", end="")
 
-        # In Login
+        # Check if the current page contains "Forgot password?". If so, we can deduct that the bot is in the login page.
         try:
             _driver.find_element(By.XPATH, "//*[contains(text(),'Forgot password?')]")
             print("@ Currently in login page.")
-            print("@ Injecting login info...")
-            sleep(1.38)
+            # Sleep at random intervals to simulate user behaviour
+            sleep(random.uniform(1, 2))
+
+            # Insert email using XPATH
+            print("@ Injecting email... ", end="")
             email_entry = _driver.find_element(By.XPATH, "//input[@name='username']")
             email_entry.clear()
             email_entry.send_keys(credentials.HARRI_EMAIL)
-            sleep(1.23)
+            sleep(random.uniform(1, 2))
+            print("OK")
 
-            print("@ Email OK")
+            # Insert password using XPATH
+            print("@ Injecting password... ", end="")
             password_entry = _driver.find_element(By.XPATH, "//input[@name='password']")
             password_entry.clear()
             password_entry.send_keys(credentials.HARRI_PASSWORD)
-            sleep(1.35)
+            sleep(random.uniform(1, 2))
+            print("OK")
 
-            print("@ Password OK")
-
+            # Click on Login button
             login_btn = _driver.find_element(By.XPATH, "//*[contains(text(),'Log in')]")
             _driver.execute_script("arguments[0].click();", login_btn)
             print("@ Login info successfully injected.")
 
-            sleep(10)
+            # Wait for successful / unsuccessful login
+            sleep(5)
 
         except NoSuchElementException:
-            print("", end="")
+            pass
 
-        # Inside Schedule
+        # Check if "General Manager" exists in the page. If so, it means that the bot is in the schedule page.
         try:
             _driver.find_element(By.XPATH, "//*[contains(text(),'General Manager')]")
             print("\n@ Currently in schedule page.")
-            break
+            # Successful login, return true
+            return True
 
         except NoSuchElementException:
-            print("", end="")
+            pass
+
+        # Wait one second
         sleep(1)
+        # Decrease the total iterations
         _iterations -= 1
 
-
-def get_identification(_driver):
-    print("* Fetching identification and cookies... ", end="")
-    all_cookies = _driver.get_cookies()
-    cookies_dict = {}
-    s_cookies = ""
-    for cookie in all_cookies:
-        cookies_dict[cookie['name']] = cookie['value']
-        s_cookies = s_cookies + cookie['name'] + ": " + cookie['value'] + "; "
-
-    ref_page = ""
-    auth = ""
-
-    for request in _driver.requests:
-        if request.headers["X-REFERRER-PAGE"] is not None:
-            ref_page = request.headers["X-REFERRER-PAGE"]
-            auth = request.headers["Authorization"]
-
-    _headers = {"Accept": "application/json",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Content-Type": "application/json",
-                "Origin": "https://live.harri.com",
-                "Referer": "https://live.harri.com",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-site",
-                "Connection": "keep-alive",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "X-REFERRER-PAGE": ref_page,
-                "Authorization": auth}
-
-    return cookies_dict, _headers
+    return False
 
 
 def get_week_blocks(_driver):
-    # print(f"* Fetching current price for {object_id}... ", end="")
+    """
 
-    cookies_dict, _headers = get_identification(_driver)
+    :param _driver:
+    :return: list of blocks
+    """
+    print("* Fetching rota...")
+
+    cookies_dict, _headers = utils.get_identification(_driver)
 
     now = datetime.now()
     r = requests.get(
@@ -212,15 +157,13 @@ def get_week_blocks(_driver):
 
 
 def get_profile_from_ids(ids, _driver):
-    cookies_dict, _headers = get_identification(_driver)
+    cookies_dict, _headers = utils.get_identification(_driver)
     for _id in ids:
         r = requests.get(
             f"{credentials.ID_LINK}/users?user_ids={_id}",
             headers=_headers,
             cookies=cookies_dict)
 
-        # print(r.content)
-        # print(json.dumps(r.json(), indent=4))
 
         data = r.json()["data"]
         first_name = data[0]["first_name"]
@@ -232,13 +175,11 @@ def get_profile_from_ids(ids, _driver):
 
 
 def fetch_schedule(_driver):
-    # blocks = get_week_blocks(_driver)
-    blocks = [datetime(2025, 1, 27, 0, 0), [1489177, 'Salvatore', 'Grillo', 'Head Chef', datetime(2025, 1, 31, 16, 0), datetime(2025, 1, 31, 23, 0), None], [1489177, 'Salvatore', 'Grillo', 'Head Chef', datetime(2025, 2, 1, 10, 0), datetime(2025, 2, 1, 22, 0), None], [1489177, 'Salvatore', 'Grillo', 'Head Chef', datetime(2025, 2, 2, 10, 0), datetime(2025, 2, 2, 16, 0), None], [1141147, 'Ervin', 'Hoksza', 'Sous Chef', datetime(2025, 1, 27, 8, 0), datetime(2025, 1, 27, 15, 0), None], [1141147, 'Ervin', 'Hoksza', 'Sous Chef', datetime(2025, 1, 28, 10, 0), datetime(2025, 1, 28, 22, 30), None], [1141147, 'Ervin', 'Hoksza', 'Sous Chef', datetime(2025, 1, 29, 10, 0), datetime(2025, 1, 29, 16, 0), None], [1141147, 'Ervin', 'Hoksza', 'Sous Chef', datetime(2025, 1, 30, 10, 0), datetime(2025, 1, 30, 22, 0), None], [1141147, 'Ervin', 'Hoksza', 'Sous Chef', datetime(2025, 1, 31, 10, 0), datetime(2025, 1, 31, 16, 0), None], [394722, 'Francesca', 'Broccoletti', 'Sous Chef', datetime(2025, 2, 1, 14, 0), datetime(2025, 2, 1, 23, 0), 'KITCHEN'], [1489078, 'Junior', 'Mendez Beltre', 'Chef', datetime(2025, 1, 27, 15, 0), datetime(2025, 1, 27, 22, 30), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 1, 27, 16, 0), datetime(2025, 1, 27, 22, 30), None], [1489078, 'Junior', 'Mendez Beltre', 'Chef', datetime(2025, 1, 28, 16, 0), datetime(2025, 1, 28, 22, 30), None], [1489128, 'Solhna', 'Camara', 'Chef', datetime(2025, 1, 29, 16, 0), datetime(2025, 1, 29, 22, 30), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 1, 29, 16, 0), datetime(2025, 1, 29, 22, 30), None], [1489128, 'Solhna', 'Camara', 'Chef', datetime(2025, 1, 30, 12, 0), datetime(2025, 1, 30, 23, 0), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 1, 30, 16, 0), datetime(2025, 1, 30, 23, 0), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 1, 31, 12, 0), datetime(2025, 1, 31, 23, 0), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 2, 1, 12, 0), datetime(2025, 2, 1, 23, 0), None], [1577160, 'Frank', 'Torres', 'Chef', datetime(2025, 2, 2, 16, 0), datetime(2025, 2, 2, 22, 0), None], [1489117, 'Andrea', 'Sanchez', 'Front of House Team Member', datetime(2025, 1, 27, 16, 0), datetime(2025, 1, 27, 22, 30), None], [1489117, 'Andrea', 'Sanchez', 'Front of House Team Member', datetime(2025, 1, 28, 16, 0), datetime(2025, 1, 28, 22, 30), None], [1489117, 'Andrea', 'Sanchez', 'Front of House Team Member', datetime(2025, 1, 29, 16, 0), datetime(2025, 1, 29, 22, 30), None], [1489117, 'Andrea', 'Sanchez', 'Front of House Team Member', datetime(2025, 1, 31, 17, 0), datetime(2025, 1, 31, 23, 0), None], [2000445, 'Namuundari', 'B', 'Front of House Team Member', datetime(2025, 1, 31, 16, 0), datetime(2025, 1, 31, 23, 0), None], [1489117, 'Andrea', 'Sanchez', 'Front of House Team Member', datetime(2025, 2, 1, 12, 0), datetime(2025, 2, 1, 23, 0), None], [2000445, 'Namuundari', 'B', 'Front of House Team Member', datetime(2025, 2, 1, 15, 0), datetime(2025, 2, 1, 23, 0), None], [1489111, 'Chelsea', 'Dryden', 'Duty Manager', datetime(2025, 2, 2, 12, 0), datetime(2025, 2, 2, 22, 0), None], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 27, 9, 0), datetime(2025, 1, 27, 16, 0), None], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 28, 10, 45), datetime(2025, 1, 28, 17, 0), 'GM MEET 1500'], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 29, 16, 0), datetime(2025, 1, 29, 22, 30), None], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 30, 15, 0), datetime(2025, 1, 30, 17, 0), None], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 31, 16, 0), datetime(2025, 1, 31, 22, 0), 'KITCHEN'], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 1, 31, 22, 0), datetime(2025, 1, 31, 23, 0), None], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 2, 1, 14, 0), datetime(2025, 2, 1, 23, 0), 'KITCHEN'], [86401, 'James', 'Tunbridge', 'General Manager', datetime(2025, 2, 2, 11, 0), datetime(2025, 2, 2, 22, 0), 'KITCHEN'], [1489136, 'Matteo', 'Organek', 'Duty Manager', datetime(2025, 1, 27, 15, 0), datetime(2025, 1, 27, 22, 30), None], [1489136, 'Matteo', 'Organek', 'Duty Manager', datetime(2025, 1, 28, 14, 0), datetime(2025, 1, 28, 22, 30), None], [1489138, 'Levente Krisztian', 'Molnar', 'Duty Manager', datetime(2025, 1, 29, 10, 0), datetime(2025, 1, 29, 17, 0), None], [1489111, 'Chelsea', 'Dryden', 'Duty Manager', datetime(2025, 1, 30, 10, 45), datetime(2025, 1, 30, 23, 0), None], [1489138, 'Levente Krisztian', 'Molnar', 'Duty Manager', datetime(2025, 1, 30, 18, 0), datetime(2025, 1, 30, 23, 0), None], [1489111, 'Chelsea', 'Dryden', 'Duty Manager', datetime(2025, 1, 31, 10, 45), datetime(2025, 1, 31, 21, 0), None], [1489136, 'Matteo', 'Organek', 'Duty Manager', datetime(2025, 2, 1, 10, 45), datetime(2025, 2, 1, 23, 0), None], [1489136, 'Matteo', 'Organek', 'Duty Manager', datetime(2025, 2, 2, 10, 45), datetime(2025, 2, 2, 22, 0), None]]
+    blocks = get_week_blocks(_driver)
 
-    print(blocks)
     for offset in range(7):
-        current_day_start = blocks[0]+timedelta(days=offset)
-        current_day_end = blocks[0]+timedelta(days=offset+1)
+        current_day_start = blocks[0] + timedelta(days=offset)
+        current_day_end = blocks[0] + timedelta(days=offset + 1)
         print(current_day_start.strftime("%A %d/%m/%Y"))
         list_schedules_day = []
         send_event = False
@@ -260,19 +201,24 @@ def fetch_schedule(_driver):
             list_schedules_day.sort(key=operator.attrgetter('start_schedule'))
             for schedule_block in list_schedules_day:
                 if schedule_block.last_name == "Organek":
-                    start_string = (f"You will be working a {schedule_block.shift_type.lower()} shift, with a total of {schedule_block.hours} hours ({schedule_block.start_schedule.strftime("%H:%M")} → {schedule_block.end_schedule.strftime("%H:%M")})."
-                                    f"\n Below you can find your coworkers' shift:")
+                    start_string = (
+                        f"You will be working a {schedule_block.shift_type.lower()} shift, with a total of {schedule_block.hours} hours ({schedule_block.start_schedule.strftime("%H:%M")} → {schedule_block.end_schedule.strftime("%H:%M")})."
+                        f"\n Below you can find your coworkers' shift:")
                     start_event = schedule_block.start_schedule
                     end_event = schedule_block.end_schedule
                 else:
-                    mid_string += (f"\n↪ {schedule_block.start_schedule.strftime("%H:%M")} → {schedule_block.end_schedule.strftime("%H:%M")} | "
-                            f"{schedule_block.first_name} | ({schedule_block.hours} hours) {schedule_block.shift_type}")
-            print(f"\n{start_string+mid_string}")
+                    mid_string += (
+                        f"\n↪ {schedule_block.start_schedule.strftime("%H:%M")} → {schedule_block.end_schedule.strftime("%H:%M")} | "
+                        f"{schedule_block.first_name} | ({schedule_block.hours} hours) {schedule_block.shift_type}")
+            print(f"\n{start_string + mid_string}")
             communicator.add_calendar_event(start_event, end_event, "Work", start_string + mid_string, 2, True)
-            communicator.add_calendar_event(start_event - timedelta(hours=1.2), start_event, "Travel to work", "", 10, False)
-            communicator.add_calendar_event(end_event, end_event + timedelta(hours=1.2), "Travel from work", "", 10, False)
+            communicator.add_calendar_event(start_event - timedelta(hours=1.2), start_event, "Travel to work", "", 10,
+                                            False)
+            communicator.add_calendar_event(end_event, end_event + timedelta(hours=1.2), "Travel from work", "", 10,
+                                            False)
+
 
 if __name__ == "__main__":
-    driver = get_driver()
+    driver = utils.get_driver()
     # login(driver)
     fetch_schedule(driver)

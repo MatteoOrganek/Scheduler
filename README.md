@@ -44,7 +44,6 @@ python scheduler.py
 ## Future Improvements
 - Improve efficiency in calendar updates
 - Add Roehampton univerity's Seats schedule tool
-- 
 
 ## Contact
 Feel free to reach out if you have any questions or feedback.

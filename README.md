@@ -1,12 +1,7 @@
 # Scheduler
 
-Scheduler is a web scraper designed to interface with the Harri schedule tool used by my workplace. The program synchronizes my work shifts with Google Calendar by automatically adding or removing events based on my schedule. Ongoing development aims to improve automation and streamline the process further.
+Scheduler is a web scraper designed to interface with the Harri schedule tool used by my workplace. The program synchronizes my work shifts with Google Calendar by automatically adding or removing events based on my schedule.
 
-## Features
-- Scrapes schedule data from Harri
-- Modifies Google Calendar by adding or removing shifts
-- Stores credentials securely for seamless authentication
-- Generates and manages temporary access tokens
 
 ## Installation
 
@@ -48,9 +43,10 @@ python scheduler.py
 ```
 
 ## Future Improvements
-- Improve efficiency in data retrieval and calendar updates
+- Improve efficiency in calendar updates
+- Add Roehampton univerity's Seats schedule tool
 - 
 
 ## Contact
-Feel free to reach out if you have any queries.
+Feel free to reach out if you have any questions or feedback.
 

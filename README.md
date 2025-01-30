@@ -18,7 +18,7 @@ Ensure you have the following installed:
 ### Setup
 1. Clone the repository:
    ```sh
-   git clone <repository_url>
+   git clone https://github.com/MatteoOrganek/Scheduler.git
    cd <repository_directory>
    ```
 
@@ -29,8 +29,6 @@ Ensure you have the following installed:
 
 3. Create a `credentials.py` file in the project root with the following variables:
    ```python
-   OWRES_USERNAME = "your_username"
-   OWRES_PASSWORD = "your_password"
    HARRI_EMAIL = "your_harri_email"
    HARRI_PASSWORD = "your_harri_password"
    ID_LINK = "https://gateway.harri.com/team/api/v3/brands/xxxxxxxx"
